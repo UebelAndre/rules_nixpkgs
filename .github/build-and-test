@@ -67,7 +67,6 @@ else
         testing/go-workspace
         testing/java
         testing/posix
-        testing/rust
         testing/python
     )
     declare -ra extra_flags=(

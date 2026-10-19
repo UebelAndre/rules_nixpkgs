@@ -13,3 +13,9 @@ To run the example with Nix, issue the following command:
 ```
 nix-shell --command 'bazel run --config=nix //:hello'
 ```
+
+Dependencies are managed with `crate_universe`. After changing the crate
+specification in `MODULE.bazel`, regenerate the lockfiles with:
+```
+nix-shell --command 'CARGO_BAZEL_REPIN=1 bazel run --config=nix //:hello'
+```

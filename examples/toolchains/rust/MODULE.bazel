@@ -1,0 +1,128 @@
+module(
+    name = "hello_world",
+    version = "0.0.0",
+)
+
+bazel_dep(name = "rules_nixpkgs_core")
+local_path_override(
+    module_name = "rules_nixpkgs_core",
+    path = "../../../core",
+)
+
+bazel_dep(name = "rules_nixpkgs_cc")
+local_path_override(
+    module_name = "rules_nixpkgs_cc",
+    path = "../../../toolchains/cc",
+)
+
+bazel_dep(name = "rules_nixpkgs_rust")
+local_path_override(
+    module_name = "rules_nixpkgs_rust",
+    path = "../../../toolchains/rust",
+)
+
+bazel_dep(name = "rules_rust", version = "0.74.0")
+
+# TODO: Remove once a rules_rust release with the Cargo toolchain and the
+# reworked crate_universe is available, and depend on that version instead.
+local_path_override(
+    module_name = "rules_rust",
+    path = "../../../../rules_rust",
+)
+
+#
+# Nixpkgs
+#
+
+# It is recommended to keep nixpkgs of nix-shell (which provide Bazel),
+# and nixpkgs of Bazel Workspace in sync - otherwise one may
+# got hit with nasty glibc mismatch errors.
+nix_repo = use_extension("@rules_nixpkgs_core//extensions:repository.bzl", "nix_repo")
+nix_repo.file(
+    name = "nixpkgs",
+    file = "//:nixpkgs.nix",
+    file_deps = [
+        "//:nixpkgs.json",
+    ],
+)
+use_repo(nix_repo, "nixpkgs")
+
+# A static build of OpenSSL from nixpkgs. Besides the library itself the
+# derivation provides an `openssl.env` file that points `OPENSSL_DIR` at its
+# own Nix store path, see `openssl-static.nix`. The build script of the
+# `openssl-sys` crate picks this up below.
+nix_pkg = use_extension("@rules_nixpkgs_core//extensions:package.bzl", "nix_pkg")
+nix_pkg.file(
+    name = "openssl-static",
+    attr = "",
+    build_file_content = """\
+exports_files(["openssl.env"])
+""",
+    file = "//:openssl-static.nix",
+    file_deps = [
+        "//:nixpkgs.json",
+    ],
+    repo = "@nixpkgs",
+)
+use_repo(nix_pkg, "openssl-static")
+
+#
+# Toolchains
+#
+
+# rules_rust also uses the cc compiler
+cc_configure = use_extension("//:extension.bzl", "cc_configure")
+use_repo(cc_configure, "nixpkgs_config_cc")
+use_repo(cc_configure, "nixpkgs_config_cc_toolchains")
+use_repo(cc_configure, "nixpkgs_config_cc_info")
+
+register_toolchains("@nixpkgs_config_cc_toolchains//:all")
+
+rust_configure = use_extension("//:extension.bzl", "rust_configure")
+use_repo(rust_configure, "nixpkgs_rust")
+use_repo(rust_configure, "nixpkgs_rust_toolchain")
+
+register_toolchains("@nixpkgs_rust_toolchain//:all")
+
+# Keep rules_rust from registering its own, downloaded, toolchains. The Rust
+# toolchain from Nix registered above is the only one in use.
+rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
+rust.toolchain(
+    edition = "2021",
+    versions = [],
+)
+
+#
+# Crates
+#
+
+# crate_universe as a way of governing deps
+crate = use_extension("@rules_rust//crate_universe:extensions.bzl", "crate")
+
+# Resolve dependencies with the `cargo` and `rustc` from Nix instead of the
+# ones rules_rust downloads from the Rust distribution, which do not run on
+# NixOS.
+crate.host_tools(
+    cargo = "@nixpkgs_rust//:bin/cargo",
+    rustc = "@nixpkgs_rust//:bin/rustc",
+)
+crate.spec(
+    package = "openssl",
+    version = "0.10.40",
+)
+
+# Ensure the openssl-sys crate will use the openssl nixpkg.
+crate.annotation(
+    build_script_env = {
+        "OPENSSL_NO_VENDOR": "1",
+        "OPENSSL_STATIC": "1",
+    },
+    build_script_env_files = ["@openssl-static//:openssl.env"],
+    crate = "openssl-sys",
+)
+crate.from_specs(
+    name = "crates",
+    cargo_lockfile = "//:Cargo.lock",
+    lockfile = "//:cargo-bazel-lock.json",
+)
+use_repo(crate, "crates")

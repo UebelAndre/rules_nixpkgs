@@ -17,3 +17,9 @@ However, this would turn either the workspace or the bzlmod case into a very
 unusual use-case of rules\_go, and would diminish the value of the test-case,
 as it would be not cover how users would use rules\_go in either workspace or
 bzlmod mode.
+
+## rules\_rust tests
+
+NOTE, the rules\_rust tests in `testing/rust` only run in bzlmod mode.
+rules\_rust dropped WORKSPACE support in 0.71.0, so there is no WORKSPACE
+setup left to test against.

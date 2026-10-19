@@ -1,6 +1,6 @@
 """<!-- Edit the docstring in `toolchains/rust/rust.bzl` and run `bazel run //docs:update-README.md` to change this repository's `README.md`. -->
 
-Rules for importing a Rust, rustfmt and rust_analyzer toolchains from Nixpkgs.
+Rules for importing Rust, Cargo, rustfmt and rust_analyzer toolchains from Nixpkgs.
 
 # Rules
 
@@ -127,6 +127,7 @@ pkgs.buildEnv {{
             visibility = ["//visibility:public"],
         )
 
+        load('@rules_rust//cargo:defs.bzl', 'cargo_toolchain')
         load('@rules_rust//rust:toolchain.bzl', 'rust_toolchain', 'rustfmt_toolchain', 'rust_analyzer_toolchain')
         rust_toolchain(
             name = "rust_nix_impl",
@@ -144,6 +145,12 @@ pkgs.buildEnv {{
             target_triple = "${{target-triple}}",
             default_edition = "{default_edition}",
             stdlib_linkflags = {stdlib_linkflags},
+            visibility = ["//visibility:public"],
+        )
+
+        cargo_toolchain(
+            name = "cargo_nix_impl",
+            cargo = ":cargo",
             visibility = ["//visibility:public"],
         )
 
@@ -169,9 +176,16 @@ _rust_nix_toolchain = """
 toolchain(
     name = "rust_nix",
     toolchain = "@{toolchain_repo}//:rust_nix_impl",
-    toolchain_type = "@rules_rust//rust:toolchain",
+    toolchain_type = "@rules_rust//rust:toolchain_type",
     exec_compatible_with = {exec_constraints},
     target_compatible_with = {target_constraints},
+)
+
+toolchain(
+    name = "cargo_nix",
+    toolchain = "@{toolchain_repo}//:cargo_nix_impl",
+    toolchain_type = "@rules_rust//cargo:toolchain_type",
+    exec_compatible_with = {exec_constraints},
 )
 
 toolchain(
@@ -250,4 +264,7 @@ def nixpkgs_rust_configure(
         target_constraints = target_constraints,
     )
     if register:
-        native.register_toolchains("@{}_toolchain//:rust_nix".format(name))
+        native.register_toolchains(
+            "@{}_toolchain//:rust_nix".format(name),
+            "@{}_toolchain//:cargo_nix".format(name),
+        )

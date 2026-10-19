@@ -1,10 +1,12 @@
 import %workspace%/../../../.bazelrc.remote-cache
 
-# TODO(cb) migrate to bzlmod
-common --noenable_bzlmod
+build:nix --host_platform=@rules_nixpkgs_core//platforms:host --incompatible_enable_cc_toolchain_resolution
 
-# merge env and action_env variables for action.run
-# (note, this is the default in Bazel 7)
-build --incompatible_merge_fixed_and_default_shell_env
-
-build:nix --host_platform=@io_tweag_rules_nixpkgs//nixpkgs/platforms:host --incompatible_enable_cc_toolchain_resolution
+# crate_universe resolves dependencies with a prebuilt `cargo-bazel` binary.
+# The Linux build of it is dynamically linked and does not run on NixOS. Use
+# the statically linked musl build there instead, e.g. by adding the following
+# to `.bazelrc.local`:
+#
+#   common --repo_env=CARGO_BAZEL_GENERATOR_URL=https://github.com/bazelbuild/rules_rust/releases/download/0.74.0/cargo-bazel-x86_64-unknown-linux-musl
+#   common --repo_env=CARGO_BAZEL_GENERATOR_SHA256=<sha256 of that file>
+try-import %workspace%/.bazelrc.local
